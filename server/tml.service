@@ -1,0 +1,13 @@
+[Unit]
+Description=tModLoader Server
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tml
+ExecStart=/home/ubuntu/tml/start-tModLoaderServer.sh -config /home/ubuntu/tml/serverconfig.txt
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

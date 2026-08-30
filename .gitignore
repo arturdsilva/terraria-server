@@ -1,0 +1,24 @@
+# Secrets — never commit
+.env
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+
+# Runtime output
+retry.log
+nohup.out
+
+# Mod binaries (300+ MB, and redistributing them is not yours to do)
+*.tmod
+tmod-staging/
+
+# World saves and backups
+*.wld
+*.twld
+*.bak
+backups/
+
+# Personal deployment notes (mod list specifics, known bugs, etc) -- not
+# part of the generic template
+NOTES.md

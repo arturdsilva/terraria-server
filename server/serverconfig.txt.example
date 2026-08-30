@@ -1,0 +1,14 @@
+# Copy to serverconfig.txt on the server and set a real password, or let
+# scripts/deploy.sh template this from .env (it substitutes the literal
+# strings YourWorld and CHANGE_ME below — keep them if you want that to work).
+world=/home/ubuntu/.local/share/Terraria/tModLoader/Worlds/YourWorld.wld
+worldname=YourWorld
+maxplayers=MAXPLAYERS_PLACEHOLDER
+port=7777
+password=CHANGE_ME
+# autocreate/difficulty: only used the first time `world=` doesn't exist yet
+# -- generates it non-interactively so the server can start under systemd
+# with no console attached. Ignored on every later start (delete the
+# .wld/.twld files on the server to regenerate with new values).
+autocreate=WORLDSIZE_PLACEHOLDER
+difficulty=WORLDDIFFICULTY_PLACEHOLDER
