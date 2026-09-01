@@ -6,6 +6,7 @@ worldname=YourWorld
 maxplayers=MAXPLAYERS_PLACEHOLDER
 port=7777
 password=CHANGE_ME
+npcstream=4
 # autocreate/difficulty: only used the first time `world=` doesn't exist yet
 # -- generates it non-interactively so the server can start under systemd
 # with no console attached. Ignored on every later start (delete the
