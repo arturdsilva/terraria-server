@@ -34,6 +34,7 @@ fi
 : "${MAX_PLAYERS:?Set MAX_PLAYERS in .env}"
 CLIENT_ONLY_MODS="${CLIENT_ONLY_MODS:-}"
 ENABLED_MODS="${ENABLED_MODS:-}"
+DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
 
 if [[ "$SERVER_PASSWORD" == "CHANGE_ME" ]]; then
   echo "ERROR: SERVER_PASSWORD is still the placeholder. Set a real one in .env." >&2
@@ -71,6 +72,22 @@ fi
 SSH=(ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new)
 SCP=(scp -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new)
 
+# Uploads $1 (content, e.g. a secret or a generated config) to $2 (remote
+# path) via a local temp file. mktemp files are created mode 600, and -p
+# preserves that mode across the copy, so a secret like the Discord webhook
+# URL never sits at a default/world-readable mode on the remote host even
+# mid-transfer.
+upload_content() {
+  local content="$1" dest="$2" tmp
+  tmp="$(mktemp)"
+  trap 'rm -f "$tmp"' RETURN
+  # No forced trailing newline: an empty $content (e.g. DISCORD_WEBHOOK_URL
+  # unset) must produce a genuinely empty 0-byte file, since server-init.sh
+  # and discord-notify.sh both gate on `[[ -s file ]]` to detect "unset".
+  printf '%s' "$content" > "$tmp"
+  "${SCP[@]}" -p "$tmp" "$SERVER_HOST:$dest"
+}
+
 echo "== verifying tmod-staging =="
 shopt -s nullglob
 tmods=("$TMOD_STAGING_DIR"/*.tmod)
@@ -96,9 +113,7 @@ echo "== mods =="
 "${SSH[@]}" "$SERVER_HOST" 'mkdir -p ~/.local/share/Terraria/tModLoader/Mods'
 "${SCP[@]}" "${tmods[@]}" "$SERVER_HOST:~/.local/share/Terraria/tModLoader/Mods/"
 
-tmp_enabled="$(mktemp)"
-trap 'rm -f "$tmp_enabled"' EXIT
-{
+enabled_json="$(
   echo "["
   first=1
   for mod in $ENABLED_MODS; do
@@ -107,31 +122,34 @@ trap 'rm -f "$tmp_enabled"' EXIT
   done
   echo
   echo "]"
-} > "$tmp_enabled"
-"${SCP[@]}" "$tmp_enabled" "$SERVER_HOST:~/.local/share/Terraria/tModLoader/Mods/enabled.json"
-rm -f "$tmp_enabled"
-trap - EXIT
+)"
+upload_content "$enabled_json" "~/.local/share/Terraria/tModLoader/Mods/enabled.json"
 
 echo "== serverconfig.txt =="
-tmp_cfg="$(mktemp)"
-trap 'rm -f "$tmp_cfg"' EXIT
 # Escape sed's delimiter/backreference/escape characters so a WORLD_NAME or
 # SERVER_PASSWORD containing '/', '&', or '\' can't corrupt the substitution.
 esc_world="$(printf '%s' "$WORLD_NAME" | sed -e 's/[\/&\\]/\\&/g')"
 esc_password="$(printf '%s' "$SERVER_PASSWORD" | sed -e 's/[\/&\\]/\\&/g')"
-sed -e "s/YourWorld/${esc_world}/g" \
+cfg_content="$(sed -e "s/YourWorld/${esc_world}/g" \
     -e "s/CHANGE_ME/${esc_password}/g" \
     -e "s/MAXPLAYERS_PLACEHOLDER/${MAX_PLAYERS}/g" \
     -e "s/WORLDSIZE_PLACEHOLDER/${WORLD_SIZE}/g" \
     -e "s/WORLDDIFFICULTY_PLACEHOLDER/${WORLD_DIFFICULTY}/g" \
-    "$ROOT/server/serverconfig.txt.example" > "$tmp_cfg"
+    "$ROOT/server/serverconfig.txt.example")"
 "${SSH[@]}" "$SERVER_HOST" 'mkdir -p ~/tml'
-"${SCP[@]}" "$tmp_cfg" "$SERVER_HOST:~/tml/serverconfig.txt"
-rm -f "$tmp_cfg"
-trap - EXIT
+upload_content "$cfg_content" "~/tml/serverconfig.txt"
+
+echo "== discord webhook =="
+upload_content "$DISCORD_WEBHOOK_URL" "~/tml/discord-webhook-url"
+"${SCP[@]}" "$ROOT/server/discord-notify.sh" "$SERVER_HOST:~/tml/discord-notify.sh"
+"${SSH[@]}" "$SERVER_HOST" 'chmod +x ~/tml/discord-notify.sh'
+if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+  echo "  DISCORD_WEBHOOK_URL not set in .env -- notifier will stay disabled"
+fi
 
 echo "== staging systemd unit + backup cron =="
 "${SCP[@]}" "$ROOT/server/tml.service" "$SERVER_HOST:/tmp/tml.service"
+"${SCP[@]}" "$ROOT/server/discord-notify.service" "$SERVER_HOST:/tmp/discord-notify.service"
 "${SCP[@]}" "$ROOT/server/backup.cron" "$SERVER_HOST:/tmp/backup.cron"
 
 echo "== remote setup (packages, tModLoader, firewall, systemd, cron) =="

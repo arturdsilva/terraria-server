@@ -23,6 +23,8 @@ scripts/
 server/
   serverconfig.txt.example  Templated by deploy.sh (world name + password substituted)
   tml.service               systemd unit, deployed by deploy.sh
+  discord-notify.sh         Tails server logs, posts join/leave events to Discord
+  discord-notify.service    systemd unit for the above, deployed by deploy.sh
   backup.cron               World backup schedule, deployed by deploy.sh
 ```
 
@@ -56,6 +58,7 @@ ssh-keygen -t ed25519 -f ~/.ssh/terraria-server.key -C terraria-server -N ""
 | `SERVER_HOST` | `user@ip` of your box — see [Getting a server](#getting-a-server) above |
 | `SSH_PRIVATE_KEY_FILE` | The keypair from `ssh-keygen` above (its public half must be authorized on the server) |
 | `TMOD_STAGING_DIR`, `TMODLOADER_VERSION`, `TMODLOADER_ZIP_URL`, `WORLD_NAME`, `SERVER_PASSWORD`, `ENABLED_MODS`, `CLIENT_ONLY_MODS` | Your own choices, see [Mods](#mods) below |
+| `DISCORD_WEBHOOK_URL` | Optional -- see [Discord join/leave notifications](#discord-joinleave-notifications) below |
 
 ## Quick start
 
@@ -177,6 +180,25 @@ password is not optional.
   loss; push copies to off-box object storage or pull them to your own
   machine periodically. Every other decision here is reversible — losing the
   world isn't.
+- **Discord notifications**: if `DISCORD_WEBHOOK_URL` is set, installs and
+  enables `discord-notify.service`; if it's empty, disables that service.
+  See [Discord join/leave notifications](#discord-joinleave-notifications).
+
+## Discord join/leave notifications
+
+Optional — posts a message to a Discord channel whenever a player joins or
+leaves.
+
+1. In Discord: channel Settings → Integrations → Webhooks → New Webhook,
+   copy its URL.
+2. Set `DISCORD_WEBHOOK_URL` in `.env` to that URL.
+3. `./scripts/deploy.sh`.
+
+`discord-notify.service` tails `journalctl -u tml` for the server's own
+`<player> has joined.` / `<player> has left.` console lines and posts them to
+the webhook — nothing runs inside the game or needs a mod. Leave
+`DISCORD_WEBHOOK_URL` empty to disable it; `deploy.sh` disables the service
+on the next run if you clear the value later.
 
 ## Troubleshooting
 

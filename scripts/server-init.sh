@@ -10,7 +10,10 @@
 # Expects, already placed by scripts/deploy.sh before this runs:
 #   ~/.local/share/Terraria/tModLoader/Mods/*.tmod + enabled.json
 #   ~/tml/serverconfig.txt
+#   ~/tml/discord-webhook-url (may be empty -- notifier stays disabled)
+#   ~/tml/discord-notify.sh (executable)
 #   /tmp/tml.service
+#   /tmp/discord-notify.service
 #   /tmp/backup.cron
 #
 # Expects in the environment: TMODLOADER_VERSION, TMODLOADER_ZIP_URL
@@ -64,9 +67,23 @@ echo "  script."
 
 echo "== systemd unit =="
 sudo mv /tmp/tml.service /etc/systemd/system/tml.service
+sudo mv /tmp/discord-notify.service /etc/systemd/system/discord-notify.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now tml
 sudo systemctl restart tml
+
+echo "== discord notifier =="
+# discord-notify.service runs as User=ubuntu (not root, unlike a bare unit
+# default) -- systemd-journal group membership is what lets that user read
+# tml.service's journal entries without sudo.
+sudo usermod -aG systemd-journal ubuntu
+if [[ -s ~/tml/discord-webhook-url ]]; then
+  sudo systemctl enable --now discord-notify
+  sudo systemctl restart discord-notify
+else
+  echo "  no webhook configured, leaving disabled"
+  sudo systemctl disable --now discord-notify 2>/dev/null || true
+fi
 
 echo "== backups =="
 mkdir -p ~/backups

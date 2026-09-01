@@ -1,0 +1,12 @@
+[Unit]
+Description=Discord join/leave notifications for the Terraria server
+After=tml.service
+
+[Service]
+User=ubuntu
+ExecStart=/home/ubuntu/tml/discord-notify.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
